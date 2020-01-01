@@ -1,79 +1,31 @@
-const puppeteer = require("puppeteer");
-const cheerio = require("cheerio");
-const moment = require("moment");
+const fs = require("fs");
 
+const buildUrlObject = require("./buildUrlObject");
 const downloadPdf = require("./downloadPdf");
 
-const getIndexHtml = async url => {
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
-
-  await page.goto("http://www.aip.net.nz");
-  await page.click("#btnAgree");
-  await page.goto(url, {
-    waitUntil: "networkidle2"
-  });
-  const html = await page.content();
-  await browser.close();
-
-  return html;
-};
-
-const parseIndexPage = async html => {
-  const $ = cheerio.load(html);
-  const chartUrls = [];
-  const indexUrls = [];
-
-  $("a").each(function(i, elem) {
-    const link = $(this)
-      .attr("href")
-      .trim();
-    const baseUrl = "http://www.aip.net.nz";
-
-    if (link.startsWith("pdf")) {
-      chartUrls.push(`${baseUrl}/${link}`);
-    }
-    if (link.startsWith("NavWalk")) {
-      indexUrls.push(`${baseUrl}/${link}`);
-    }
-  });
-
-  return [chartUrls, indexUrls];
-};
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 (async () => {
-  const result = {};
-  result.retrievedAt = new moment.utc().format("DD MMM HH:mm:ss");
+  // const chartObject = await buildUrlObject();
+  const testObject = require("./testData");
+  const charts = testObject.charts;
 
-  const homeIndexHtml = await getIndexHtml(
-    "http://www.aip.net.nz/NavWalk.aspx?section=CHARTS"
-  );
+  if (!fs.existsSync("./pdf")) fs.mkdirSync("./pdf");
 
-  const [chartUrls, indexUrls] = await parseIndexPage(homeIndexHtml);
+  Object.keys(charts).forEach(async code => {
+    await sleep(5000);
+    if (!fs.existsSync(`./pdf/${code}`)) fs.mkdirSync(`./pdf/${code}`);
 
-  console.log(
-    "###############################################################################################\n\n"
-  );
-  chartUrls.forEach(url => {
-    const code = url
-      .split("/")
-      .pop()
-      .split(".")
-      .shift();
-    result[code] = url;
+    if (typeof charts[code] === "string") {
+      await downloadPdf(charts[code], `./pdf/${code}`);
+    }
+    // charts[code].forEach(async url => {
+    //   console.log("url :", url);
+    //   await downloadPdf(url, `./pdf/${code}`);
+    // });
+
+    await sleep(2000);
   });
-
-  //   indexUrls.forEach(async url => {
-  for (url of indexUrls) {
-    console.log(`Scraping charts for ${url}`);
-    const [charts, urls] = await parseIndexPage(await getIndexHtml(url));
-    const code = charts[0]
-      .split("/")
-      .pop()
-      .slice(0, 4);
-    result[code] = charts;
-  }
-  //   });
-
-  console.log("result :", result);
 })();
